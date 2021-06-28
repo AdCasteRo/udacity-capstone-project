@@ -284,15 +284,7 @@ def upload_s3(spark, immi, temp, demo, airp, time):
     
     output_data = 's3a://acr-udacity-capstone-bucket-2/'
     print("Starting upload to S3")
-    
-    start_time = chrono.time()
-    time.write.mode('overwrite').parquet(output_data+'time')
-    print("Time data uploaded, %s seconds" % (chrono.time() - start_time))
-    
-    start_time = chrono.time()
-    airp.write.mode('overwrite').parquet(output_data+'airp')
-    print("Airport data uploaded, %s seconds" % (chrono.time() - start_time))
-    
+        
     start_time = chrono.time()
     immi.write.mode('overwrite').partitionBy("biryear").parquet(output_data+"immi")
     print("Immigration data uploaded, %s seconds" % (chrono.time() - start_time))
@@ -304,6 +296,15 @@ def upload_s3(spark, immi, temp, demo, airp, time):
     start_time = chrono.time()
     demo.write.mode('overwrite').partitionBy("State", "City").parquet(output_data+'demo')
     print("Demographics data uploaded, %s seconds" % (chrono.time() - start_time))
+    
+    start_time = chrono.time()
+    time.write.mode('overwrite').parquet(output_data+'time')
+    print("Time data uploaded, %s seconds" % (chrono.time() - start_time))
+    
+    start_time = chrono.time()
+    airp.write.mode('overwrite').parquet(output_data+'airp')
+    print("Airport data uploaded, %s seconds" % (chrono.time() - start_time))
+
     
 
     print("Upload to s3 completed")

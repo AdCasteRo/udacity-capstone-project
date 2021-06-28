@@ -73,9 +73,7 @@ staging_temperature_table_create = ("""
         AverageTemperature TEXT,
         AverageTemperatureUncertainty TEXT,
         City TEXT,
-        Country TEXT,
-        Latitude TEXT,
-        Longitude TEXT
+        Country TEXT
      );
 """)
 
