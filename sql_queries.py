@@ -167,8 +167,8 @@ immi_cast = ("""
                 birth.Country as BirthCountry,
                 res.Country as ResidenceCountry,
                 Port,
-                i94bir,
-                biryear,
+                INT(i94bir) as age,
+                INT(biryear) as biryear,
                 visatype,
                 gender,
                 Mode,
@@ -185,6 +185,7 @@ immi_cast = ("""
 
 temp_cast = ("""
     SELECT
+        INT('0') as ID,
         Country,
         City,
         to_date(dt, 'yyyy-mm-dd') as dt,
@@ -195,6 +196,7 @@ temp_cast = ("""
 
 demo_cast = ("""
     SELECT
+        INT('0') as ID,
         DOUBLE(Median_age) as median_age,
         INT(Male_population) as male_population,
         INT(Female_population) as female_population,
