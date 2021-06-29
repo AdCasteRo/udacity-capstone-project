@@ -4,7 +4,7 @@ from pyspark.sql.functions import *
 import re
 import configparser
 import psycopg2
-from sql_queries import create_table_queries, drop_table_queries, copy_table_queries
+from sql_queries import create_table_queries, drop_table_queries, copy_table_queries, immi_cast, temp_cast, airp_cast, demo_cast
 import os
 from pyspark.sql import SparkSession
 from pyspark.sql.types import *
@@ -143,7 +143,7 @@ def spark_init():
     os.environ['AWS_ACCESS_KEY_ID']=config['AWS']['AWS_ACCESS_KEY_ID']
     os.environ['AWS_SECRET_ACCESS_KEY']=config['AWS']['AWS_SECRET_ACCESS_KEY']
 
-    spark = SparkSession.builder.config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:2.7.0").config("spark.hadoop.fs.s3a.awsAccessKeyId", os.environ['AWS_ACCESS_KEY_ID']).config("spark.hadoop.fs.s3a.awsSecretAccessKey", os.environ['AWS_SECRET_ACCESS_KEY']).getOrCreate()
+    spark = SparkSession.builder.config("spark.jars.packages", "org.apache.hadoop:hadoop-aws:2.7.0").config("spark.hadoop.fs.s3a.awsAccessKeyId", os.environ['AWS_ACCESS_KEY_ID']).config("spark.hadoop.fs.s3a.awsSecretAccessKey", os.environ['AWS_SECRET_ACCESS_KEY']).config("spark.hadoop.fs.s3a.multiobjectdelete.enable","false").getOrCreate()
     print("Spark Session created")
     
     return spark
@@ -186,6 +186,9 @@ def clean_dataframe(spark, immi_df, temp_df, demo_df, airp_df):
     
     del_cols1 = ['entdepu', 'occup', 'insnum', 'visapost']
     immi_df = immi_df.drop(*del_cols1)
+    
+    del_cols2 = ['coordinates', 'Latitude', 'Longitude']
+    airp_df = airp_df.drop(*del_cols2)
         
     del_cols2 = ['local_code', 'gps_code']
     airp_df = airp_df.drop(*del_cols2)
@@ -197,53 +200,12 @@ def clean_dataframe(spark, immi_df, temp_df, demo_df, airp_df):
     airp_df = d_duplicates(airp_df, col2)
     
     airp_df = airp_df.filter(airp_df.iata_code.isNotNull())
-    print(f"Numeber of airport lines: {airp_df.count()}")
     
     temp_df = temp_df.filter(temp_df.Country == 'United States')
     temp_df = temp_df.filter(temp_df.AverageTemperature != 'None')
-    print(f"Number of temperature lines: {temp_df.count()}")
     
     for name in demo_df.schema.names:
           demo_df = demo_df.withColumnRenamed(name, name.replace(' ', '_'))
-    
-    i94cit_res, i94port, i94mode, i94addr, i94visa = labels_reader()
-    i94cit_res = spark.createDataFrame(i94cit_res)
-    i94port = spark.createDataFrame(i94port)
-    i94mode = spark.createDataFrame(i94mode)
-    i94addr = spark.createDataFrame(i94addr)
-    i94visa = spark.createDataFrame(i94visa)
- 
-    
-    immi_df.createOrReplaceTempView("immi")
-    i94cit_res.createOrReplaceTempView("cit_res")
-    i94port.createOrReplaceTempView("port")
-    i94mode.createOrReplaceTempView("mode")
-    i94addr.createOrReplaceTempView("addr")
-    i94visa.createOrReplaceTempView("visa")
-    
-    immi_df = spark.sql("""
-        SELECT 
-                cicid,
-                arrdate,
-                depdate,
-                birth.Country as BirthCountry,
-                res.Country as ResidenceCountry,
-                Port,
-                i94bir,
-                biryear,
-                visatype,
-                gender,
-                Mode,
-                State,
-                Type
-        FROM immi
-        LEFT JOIN cit_res AS birth ON immi.i94cit = birth.code
-        LEFT JOIN cit_res AS res ON immi.i94res = res.code
-        LEFT JOIN port ON immi.i94port = port.code
-        LEFT JOIN mode ON immi.i94mode = mode.code
-        LEFT JOIN addr ON immi.i94addr = addr.code
-        LEFT JOIN visa ON immi.i94visa = visa.code
-    """)
     
     return immi_df, temp_df, demo_df, airp_df
 
@@ -259,12 +221,13 @@ def create_time(spark, immi_df, temp_df):
     temp_df.createOrReplaceTempView("temp_df")
         
     time_df = spark.sql("""
-        SELECT date_add('1960-01-01', arrdate) as time FROM immi_df 
-        UNION SELECT date_add('1960-01-01', depdate) as time FROM immi_df 
+        SELECT arrdates as time FROM immi_df 
+        UNION SELECT depdates as time FROM immi_df 
         UNION SELECT dt as time FROM temp_df
     """)
     
-    time_df = time_df.select( col("time"), year(col("time")).alias("year"), 
+    time_df = time_df.select( to_date(col("time"),"yyyy-mm-dd").alias('time') , 
+        year(col("time")).alias("year"), 
        month(col("time")).alias("month"), 
        dayofweek(col("time")).alias("dayofweek"), 
        dayofmonth(col("time")).alias("dayofmonth"), 
@@ -276,6 +239,33 @@ def create_time(spark, immi_df, temp_df):
     
     return time_df
 
+def cast_dataframe(spark, immi_df, temp_df, demo_df, airp_df):
+    
+    i94cit_res, i94port, i94mode, i94addr, i94visa = labels_reader()
+    i94cit_res = spark.createDataFrame(i94cit_res)
+    i94port = spark.createDataFrame(i94port)
+    i94mode = spark.createDataFrame(i94mode)
+    i94addr = spark.createDataFrame(i94addr)
+    i94visa = spark.createDataFrame(i94visa)
+    i94cit_res.createOrReplaceTempView("cit_res")
+    i94port.createOrReplaceTempView("port")
+    i94mode.createOrReplaceTempView("mode")
+    i94addr.createOrReplaceTempView("addr")
+    i94visa.createOrReplaceTempView("visa")
+ 
+    
+    immi_df.createOrReplaceTempView("immi")
+    temp_df.createOrReplaceTempView("temp")
+    demo_df.createOrReplaceTempView("demo")
+    airp_df.createOrReplaceTempView("airp")
+    
+    immi_df = spark.sql(immi_cast)
+    temp_df = spark.sql(temp_cast)
+    demo_df = spark.sql(demo_cast)
+    airp_df = spark.sql(airp_cast)
+    
+    return immi_df, temp_df, demo_df, airp_df
+
 
 def upload_s3(spark, immi, temp, demo, airp, time):
     """
@@ -284,25 +274,30 @@ def upload_s3(spark, immi, temp, demo, airp, time):
     
     output_data = 's3a://acr-udacity-capstone-bucket-2/'
     print("Starting upload to S3")
-        
-    start_time = chrono.time()
-    immi.write.mode('overwrite').partitionBy("biryear").parquet(output_data+"immi")
-    print("Immigration data uploaded, %s seconds" % (chrono.time() - start_time))
     
+    temp.printSchema()
     start_time = chrono.time()
-    temp.write.mode('overwrite').partitionBy("country").parquet(output_data+'temp')
+    temp.limit(5).write.mode('overwrite').parquet(output_data+'temp')
     print("Temperature data uploaded, %s seconds" % (chrono.time() - start_time))
     
+    immi.printSchema()
     start_time = chrono.time()
-    demo.write.mode('overwrite').partitionBy("State", "City").parquet(output_data+'demo')
+    immi.limit(5).write.mode('overwrite').parquet(output_data+"immi")
+    print("Immigration data uploaded, %s seconds" % (chrono.time() - start_time))
+    
+    demo.printSchema()
+    start_time = chrono.time()
+    demo.limit(5).write.mode('overwrite').parquet(output_data+'demo')
     print("Demographics data uploaded, %s seconds" % (chrono.time() - start_time))
     
+    time.printSchema()
     start_time = chrono.time()
-    time.write.mode('overwrite').parquet(output_data+'time')
+    time.limit(5).write.mode('overwrite').parquet(output_data+'time')
     print("Time data uploaded, %s seconds" % (chrono.time() - start_time))
     
+    airp.printSchema()
     start_time = chrono.time()
-    airp.write.mode('overwrite').parquet(output_data+'airp')
+    airp.limit(5).write.mode('overwrite').parquet(output_data+'airp')
     print("Airport data uploaded, %s seconds" % (chrono.time() - start_time))
 
     

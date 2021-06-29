@@ -31,80 +31,15 @@ time_table_drop = "DROP TABLE IF EXISTS time;"
 
 
 
-# CREATE STAGING TABLES
-
-staging_immigration_table_create= ("""
-     CREATE TABLE IF NOT EXISTS staging_i94data (
-         cicid  DOUBLE PRECISION PRIMARY KEY,
-         i94yr  INT,
-         i94mon  INT,
-         i94cit  DOUBLE PRECISION,
-         i94res  DOUBLE PRECISION,
-         i94port  TEXT,
-         arrdate  DOUBLE PRECISION,
-         i94mode  DOUBLE PRECISION,
-         i94addr  TEXT,
-         depdate  DOUBLE PRECISION,
-         i94bir  DOUBLE PRECISION,
-         i94visa  DOUBLE PRECISION,
-         count  DOUBLE PRECISION,
-         dtadfile  TEXT,
-         visapost  TEXT,
-         occup  TEXT,
-         entdepa  TEXT,
-         entdepd  TEXT,
-         entdepu  TEXT,
-         matflag  TEXT,
-         biryear  DOUBLE PRECISION,
-         dtaddto  TEXT,
-         gender  TEXT,
-         insnum  TEXT,
-         airline  TEXT,
-         admnum  DOUBLE PRECISION,
-         fltno  TEXT,
-         visatype  TEXT 
-     );
-""")
-
-staging_temperature_table_create = ("""
-     CREATE TABLE IF NOT EXISTS staging_temp (
-        id INT IDENTITY(0,1) PRIMARY KEY SORTKEY DISTKEY, 
-        dt TEXT,
-        AverageTemperature TEXT,
-        AverageTemperatureUncertainty TEXT,
-        City TEXT,
-        Country TEXT
-     );
-""")
-
-
-staging_airport_table_create = ("""
-     CREATE TABLE IF NOT EXISTS staging_airp (
-        ident TEXT PRIMARY,
-        type TEXT,
-        name TEXT,
-        elevation_ft TEXT,
-        continent TEXT,
-        iso_country TEXT,
-        iso_region TEXT,
-        municipality TEXT,
-        gps_code TEXT,
-        iata_code TEXT,
-        local_code TEXT,
-        coordinates TEXT
-    );
-""")
-
-
 # CREATE FINAL TABLES
 
 immigration_table_create = ("""
     CREATE TABLE IF NOT EXISTS immigration (
-        id INT PRIMARY KEY SORTKEY DISTKEY, 
-        arrival_date INT NOT NULL,
-        departure_date INT NOT NULL,
-        birth_country INT NOT NULL,
-        residence_country INT NOT NULL,
+        id INT8 PRIMARY KEY SORTKEY DISTKEY, 
+        arrival_date DATE NOT NULL,
+        departure_date DATE NOT NULL,
+        birth_country TEXT NOT NULL,
+        residence_country TEXT NOT NULL,
         port TEXT NOT NULL,
         age INT,
         birth_year INT,
@@ -118,7 +53,7 @@ immigration_table_create = ("""
 
 temperature_table_create = ("""
     CREATE TABLE IF NOT EXISTS temperature (
-        id INT PRIMARY KEY SORTKEY DISTKEY,
+        id INT IDENTITY(0,1) PRIMARY KEY SORTKEY DISTKEY,
         country TEXT NOT NULL,
         city TEXT NOT NULL,
         date INT NOT NULL,
@@ -129,7 +64,7 @@ temperature_table_create = ("""
 
 airport_table_create = ("""
     CREATE TABLE IF NOT EXISTS airport (
-        id INT IDENTITY(0,1) PRIMARY KEY SORTKEY DISTKEY,
+        id TEXT PRIMARY KEY SORTKEY DISTKEY,
         type TEXT,
         name TEXT,
         elevation INT,
@@ -137,17 +72,13 @@ airport_table_create = ("""
         country TEXT,
         region TEXT,
         municipality TEXT,
-        iata_code TEXT,
-        longitude DOUBLE PRECISION,
-        latitude DOUBLE PRECISION
+        iata_code TEXT
     );
 """)
 
 demographics_table_create = ("""
     CREATE TABLE IF NOT EXISTS demographics (
         id INT IDENTITY(0,1) PRIMARY KEY SORTKEY DISTKEY,
-        city TEXT,
-        state TEXT,
         median_age FLOAT,
         male_population INT,
         female_population INT,
@@ -157,7 +88,10 @@ demographics_table_create = ("""
         average_household FLOAT,
         state_code TEXT,
         race TEXT,
-        count INT
+        count INT,
+        state TEXT,
+        city TEXT
+
     );
 """)
 
@@ -223,10 +157,73 @@ time_copy = ("""
 
 
 
-#DEBUG QUERY
-check_errors = ("""
-    SELECT * FROM stl_load_errors
+# CAST TABLES
+
+immi_cast = ("""
+        SELECT 
+                BIGINT(cicid),
+                date_add('1960-01-01', arrdate) as arrdates,
+                date_add('1960-01-01', depdate) as depdates,
+                birth.Country as BirthCountry,
+                res.Country as ResidenceCountry,
+                Port,
+                i94bir,
+                biryear,
+                visatype,
+                gender,
+                Mode,
+                State,
+                Type
+        FROM immi
+        LEFT JOIN cit_res AS birth ON immi.i94cit = birth.code
+        LEFT JOIN cit_res AS res ON immi.i94res = res.code
+        LEFT JOIN port ON immi.i94port = port.code
+        LEFT JOIN mode ON immi.i94mode = mode.code
+        LEFT JOIN addr ON immi.i94addr = addr.code
+        LEFT JOIN visa ON immi.i94visa = visa.code
+    """)
+
+temp_cast = ("""
+    SELECT
+        Country,
+        City,
+        to_date(dt, 'yyyy-mm-dd') as dt,
+        DOUBLE(AverageTemperature) as AverageTemperature,
+        DOUBLE(AverageTemperatureUncertainty) as Uncertainty
+    FROM temp
 """)
+
+demo_cast = ("""
+    SELECT
+        DOUBLE(Median_age) as median_age,
+        INT(Male_population) as male_population,
+        INT(Female_population) as female_population,
+        INT(Total_population) as total_population,
+        INT(Number_of_Veterans) as number_of_veterans,
+        INT('Foreign-born') as foreign_born,
+        DOUBLE(Average_Household_Size) as average_household_size,
+        State_Code,
+        Race,
+        INT(Count) as count,
+        State,
+        City
+    FROM demo
+""")
+
+airp_cast = ("""
+    SELECT
+        ident,
+        type,
+        name,
+        INT(elevation_ft) as elevation,
+        continent,
+        iso_country,
+        iso_region,
+        municipality,
+        iata_code
+    FROM airp
+""")
+
 
 
 
@@ -238,9 +235,11 @@ check_errors = ("""
 # QUERY LISTS
 
 drop_table_queries = [staging_immigration_table_drop, staging_temperature_table_drop, staging_airport_table_drop, staging_demographics_table_drop, immigration_table_drop, temperature_table_drop, airport_table_drop, demographics_table_drop, time_table_drop ]
-create_table_queries = [ immigration_table_create, temperature_table_create, airport_table_create, demographics_table_create, time_table_create ]
-copy_table_queries = [ immigration_copy, temperature_copy, demographics_copy, airport_copy, time_copy ]
+create_table_queries = [ time_table_create, immigration_table_create, temperature_table_create, airport_table_create, demographics_table_create ]
+copy_table_queries = [ airport_copy, time_copy,  temperature_copy, immigration_copy, demographics_copy ]
+cast_table_queries = [ immi_cast, temp_cast, demo_cast, airp_cast ]
 
 
-errors_query = [check_errors]
 
+#        longitude DOUBLE PRECISION,
+#        latitude DOUBLE PRECISION
