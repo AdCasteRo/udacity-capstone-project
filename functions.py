@@ -4,7 +4,7 @@ from pyspark.sql.functions import *
 import re
 import configparser
 import psycopg2
-from sql_queries import create_table_queries, drop_table_queries, copy_table_queries, immi_cast, temp_cast, airp_cast, demo_cast
+from sql_queries import create_table_queries, drop_table_queries, copy_table_queries, immi_cast, temp_cast, airp_cast, demo_cast, quality_table_queries
 import os
 from pyspark.sql import SparkSession
 from pyspark.sql.types import *
@@ -277,32 +277,38 @@ def upload_s3(spark, immi, temp, demo, airp, time):
     
     temp.printSchema()
     start_time = chrono.time()
-    temp.limit(5).write.mode('overwrite').parquet(output_data+'temp')
+    temp.write.mode('overwrite').parquet(output_data+'temp')
+    nt = temp.count()
     print("Temperature data uploaded, %s seconds" % (chrono.time() - start_time))
     
     immi.printSchema()
     start_time = chrono.time()
-    immi.limit(5).write.mode('overwrite').parquet(output_data+"immi")
+    immi.write.mode('overwrite').parquet(output_data+"immi")
+    ni = immi.count()
     print("Immigration data uploaded, %s seconds" % (chrono.time() - start_time))
     
     demo.printSchema()
     start_time = chrono.time()
-    demo.limit(5).write.mode('overwrite').parquet(output_data+'demo')
+    demo.write.mode('overwrite').parquet(output_data+'demo')
+    nd = demo.count()
     print("Demographics data uploaded, %s seconds" % (chrono.time() - start_time))
     
     time.printSchema()
     start_time = chrono.time()
-    time.limit(5).write.mode('overwrite').parquet(output_data+'time')
+    time.write.mode('overwrite').parquet(output_data+'time')
+    nc = time.count()
     print("Time data uploaded, %s seconds" % (chrono.time() - start_time))
     
     airp.printSchema()
     start_time = chrono.time()
-    airp.limit(5).write.mode('overwrite').parquet(output_data+'airp')
+    airp.write.mode('overwrite').parquet(output_data+'airp')
+    na = airp.count()
     print("Airport data uploaded, %s seconds" % (chrono.time() - start_time))
 
-    
-
     print("Upload to s3 completed")
+    
+    n = [ni, nt, nd, na, nc]
+    return n
 
 
 def insert_redshift():
@@ -320,7 +326,6 @@ def insert_redshift():
         loadTimes = []
         t0 = chrono.time()
         print("======= LOADING TABLE =======")
-        print(query)
         
         cur.execute(query)
         conn.commit()
@@ -328,4 +333,26 @@ def insert_redshift():
         loadTime = chrono.time()-t0
         loadTimes.append(loadTime)
         print("=== DONE IN: {0:.2f} sec\n".format(loadTime))
+        
+
+def quality_database(n):
+
+    config = configparser.ConfigParser()
+    config.read('config.cfg')
     
+    conn = psycopg2.connect("user={} password={} host={} port={} dbname={}".format(*config['CLUSTER'].values()))
+    cur = conn.cursor()
+    
+    i=0
+    for query in quality_table_queries:
+        
+        cur.execute(query)
+        rows = cur.fetchall()
+        
+        for row in rows:
+            m = n[i] - row [0]
+            if m == 0:
+                print("No rows missing")
+            else:
+                print(f"Number of rows missing: {m}")
+        i+=1

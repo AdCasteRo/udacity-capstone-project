@@ -1,10 +1,11 @@
 import configparser
 
 
+
+
 # CONFIG
 config = configparser.ConfigParser()
 config.read('config.cfg')
-
 
 ACCESS_KEY_ID=config['AWS']['AWS_ACCESS_KEY_ID']
 SECRET_ACCESS_KEY=config['AWS']['AWS_SECRET_ACCESS_KEY']
@@ -14,6 +15,8 @@ TEMP_DATA        = "s3://acr-udacity-capstone-bucket-2/temp"
 DEMO_DATA        = "s3://acr-udacity-capstone-bucket-2/demo"
 AIRP_DATA        = "s3://acr-udacity-capstone-bucket-2/airp"
 TIME_DATA        = "s3://acr-udacity-capstone-bucket-2/time"
+
+
 
 
 # DROP TABLES
@@ -28,6 +31,7 @@ temperature_table_drop = "DROP TABLE IF EXISTS temperature;"
 airport_table_drop = "DROP TABLE IF EXISTS airport;"
 demographics_table_drop = "DROP TABLE IF EXISTS demographics;"
 time_table_drop = "DROP TABLE IF EXISTS time;"
+
 
 
 
@@ -108,7 +112,10 @@ time_table_create = ("""
 """)
 
 
+
+
 #LOADING THE DATA INTO REDSHIFT
+
 immigration_copy = ("""
     COPY immigration FROM '{}'
     ACCESS_KEY_ID '{}'
@@ -229,9 +236,37 @@ airp_cast = ("""
 
 
 
+# QUALITY QUERIES
 
+immi_quality = ("""
+    SELECT
+        COUNT(*)
+    FROM immigration
+""")
 
+temp_quality = ("""
+    SELECT
+        COUNT(*)
+    FROM immigration
+""")
 
+demo_quality = ("""
+    SELECT
+        COUNT(*)
+    FROM immigration
+""")
+
+airp_quality = ("""
+    SELECT
+        COUNT(*)
+    FROM immigration
+""")
+
+time_quality = ("""
+    SELECT
+        COUNT(*)
+    FROM immigration
+""")
 
 
 # QUERY LISTS
@@ -240,8 +275,5 @@ drop_table_queries = [staging_immigration_table_drop, staging_temperature_table_
 create_table_queries = [ time_table_create, immigration_table_create, temperature_table_create, airport_table_create, demographics_table_create ]
 copy_table_queries = [ airport_copy, time_copy,  temperature_copy, immigration_copy, demographics_copy ]
 cast_table_queries = [ immi_cast, temp_cast, demo_cast, airp_cast ]
+quality_table_queries = [ immi_quality, temp_quality, demo_quality, airp_quality, time_quality ]
 
-
-
-#        longitude DOUBLE PRECISION,
-#        latitude DOUBLE PRECISION
