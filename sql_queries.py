@@ -173,7 +173,7 @@ immi_cast = ("""
                 date_add('1960-01-01', depdate) as depdates,
                 birth.Country as BirthCountry,
                 res.Country as ResidenceCountry,
-                Port,
+                i94port as port,
                 INT(i94bir) as age,
                 INT(biryear) as biryear,
                 visatype,
@@ -184,7 +184,6 @@ immi_cast = ("""
         FROM immi
         LEFT JOIN cit_res AS birth ON immi.i94cit = birth.code
         LEFT JOIN cit_res AS res ON immi.i94res = res.code
-        LEFT JOIN port ON immi.i94port = port.code
         LEFT JOIN mode ON immi.i94mode = mode.code
         LEFT JOIN addr ON immi.i94addr = addr.code
         LEFT JOIN visa ON immi.i94visa = visa.code
@@ -247,26 +246,64 @@ immi_quality = ("""
 temp_quality = ("""
     SELECT
         COUNT(*)
-    FROM immigration
+    FROM temperature
 """)
 
 demo_quality = ("""
     SELECT
         COUNT(*)
-    FROM immigration
+    FROM demographics
 """)
 
 airp_quality = ("""
     SELECT
         COUNT(*)
-    FROM immigration
+    FROM airport
 """)
 
 time_quality = ("""
     SELECT
         COUNT(*)
+    FROM time
+""")
+
+immi_integrity = ("""
+    SELECT
+        'Immigration' as table,
+        (count(arrival_date)/count(*))*100 as arrdate,
+        (count(departure_date)/count(*))*100 as depdate,
+        (count(Port)/count(*))*100 as port
     FROM immigration
 """)
+
+temp_integrity = ("""
+    SELECT 
+        'Temperature' as table,
+        (count(city)/count(*))*100 as city, 
+        (count(country)/count(*))*100 as country, 
+        (count(date)/count(*))*100 as date
+    FROM temperature
+""")
+
+demo_integrity = ("""
+    SELECT
+        'Demographics' as table,
+       (count(city)/count(*))*100 as city, 
+       (count(state)/count(*))*100 as state
+    FROM demographics
+""")
+
+airp_integrity = ("""
+    SELECT 
+        'Airport' as table,
+       (count(region)/count(*))*100 as region, 
+       (count(Municipality)/count(*))*100 as city,
+       (count(iata_code)/count(*))*100 as code
+    FROM airport
+""")
+
+
+
 
 
 # QUERY LISTS
@@ -276,4 +313,5 @@ create_table_queries = [ time_table_create, immigration_table_create, temperatur
 copy_table_queries = [ airport_copy, time_copy,  temperature_copy, immigration_copy, demographics_copy ]
 cast_table_queries = [ immi_cast, temp_cast, demo_cast, airp_cast ]
 quality_table_queries = [ immi_quality, temp_quality, demo_quality, airp_quality, time_quality ]
+integrity_table_queries = [ immi_integrity, temp_integrity, demo_integrity, airp_integrity ]
 
